@@ -8,6 +8,8 @@ import {
   useVideoConfig,
 } from 'remotion';
 import {ThreeCanvas} from '@remotion/three';
+import {useThree} from '@react-three/fiber';
+import {PerspectiveCamera} from 'three';
 
 export type SceneConfig = {
   id: string;
@@ -40,7 +42,7 @@ type SceneProps = {
   duration: number;
 };
 
-/* ----------------------------- Lingkungan ----------------------------- */
+/* ----------------------------- LINGKUNGAN ----------------------------- */
 
 const Environment: React.FC<{config: SceneConfig; frame: number}> = ({
   config,
@@ -48,6 +50,7 @@ const Environment: React.FC<{config: SceneConfig; frame: number}> = ({
 }) => {
   const period = 39;
   const speed = 0.12;
+
   const dashes = Array.from({length: 13}, (_, i) => {
     return ((i * 3 + frame * speed) % period) - period / 2;
   });
@@ -57,19 +60,16 @@ const Environment: React.FC<{config: SceneConfig; frame: number}> = ({
       <color attach="background" args={[config.background]} />
       <fog attach="fog" args={[config.fog, 12, 30]} />
 
-      {/* Tanah */}
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[90, 90]} />
         <meshStandardMaterial color={config.ground} roughness={1} />
       </mesh>
 
-      {/* Jalan */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]}>
         <planeGeometry args={[90, 5]} />
         <meshStandardMaterial color={config.road} roughness={0.9} />
       </mesh>
 
-      {/* Garis putus-putus yang bergerak, memberi kesan mobil melaju */}
       {dashes.map((x, i) => (
         <mesh key={`dash-${i}`} position={[x, 0.012, 0]}>
           <boxGeometry args={[1.4, 0.01, 0.08]} />
@@ -84,24 +84,36 @@ const Environment: React.FC<{config: SceneConfig; frame: number}> = ({
   );
 };
 
-/* ------------------------------ Pencahayaan --------------------------- */
+/* ----------------------------- PENCAHAYAAN ---------------------------- */
 
 const Lights: React.FC<{config: SceneConfig; frame: number}> = ({
   config,
   frame,
 }) => {
   const angle = frame * 0.02;
+
   return (
     <>
       <ambientLight intensity={0.35} />
-      <directionalLight position={[5, 8, 6]} intensity={1.1} color="#ffffff" />
+
+      <directionalLight
+        position={[5, 8, 6]}
+        intensity={1.1}
+        color="#ffffff"
+      />
+
       <directionalLight
         position={[-6, 3, -4]}
         intensity={0.4}
         color={config.accent}
       />
+
       <pointLight
-        position={[Math.cos(angle) * 4.5, 2.5, Math.sin(angle) * 4.5]}
+        position={[
+          Math.cos(angle) * 4.5,
+          2.5,
+          Math.sin(angle) * 4.5,
+        ]}
         intensity={config.lightIntensity}
         color={config.accent}
         distance={18}
@@ -110,78 +122,88 @@ const Lights: React.FC<{config: SceneConfig; frame: number}> = ({
   );
 };
 
-/* -------------------------------- Kamera ------------------------------ */
+/* ------------------------------- KAMERA -------------------------------- */
 
-const Camera: React.FC<{config: SceneConfig; frame: number; duration: number}> =
-  ({config, frame, duration}) => {
-    const progress = interpolate(frame, [0, duration], [0, 1], {
-      extrapolateLeft: 'clamp',
-      extrapolateRight: 'clamp',
-      easing: Easing.inOut(Easing.cubic),
-    });
+const Camera: React.FC<{
+  config: SceneConfig;
+  frame: number;
+  duration: number;
+}> = ({config, frame, duration}) => {
+  const camera = useThree((state) => state.camera);
 
-    const angle = ((config.orbitStart + progress * 70) * Math.PI) / 180;
-    const radius = 9.2 - progress * 1.8;
-    const height = 1.7 + Math.sin(frame * 0.025) * 0.25;
-    const position: [number, number, number] = [
-      Math.cos(angle) * radius,
-      height,
-      Math.sin(angle) * radius,
-    ];
+  const progress = interpolate(frame, [0, duration], [0, 1], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+    easing: Easing.inOut(Easing.cubic),
+  });
 
-    return (
-      <perspectiveCamera
-        makeDefault
-        fov={36}
-        near={0.1}
-        far={200}
-        position={position}
-        onUpdate={(cam) => cam.lookAt(0, 1.1, 0)}
-      />
-    );
-  };
+  const angle =
+    ((config.orbitStart + progress * 70) * Math.PI) / 180;
 
-/* ---------------------------------- Mobil ----------------------------- */
+  const radius = 9.2 - progress * 1.8;
+  const height = 1.7 + Math.sin(frame * 0.025) * 0.25;
 
-const Car: React.FC<{config: SceneConfig; frame: number; fps: number}> = ({
-  config: c,
-  frame,
-  fps,
-}) => {
-  // Mobil meluncur turun ke posisinya di awal scene
+  const position: [number, number, number] = [
+    Math.cos(angle) * radius,
+    height,
+    Math.sin(angle) * radius,
+  ];
+
+  if (camera instanceof PerspectiveCamera) {
+    camera.fov = 36;
+    camera.near = 0.1;
+    camera.far = 200;
+  }
+
+  camera.position.set(...position);
+  camera.lookAt(0, 1.1, 0);
+  camera.updateProjectionMatrix();
+
+  return null;
+};
+
+/* -------------------------------- MOBIL -------------------------------- */
+
+const Car: React.FC<{
+  config: SceneConfig;
+  frame: number;
+  fps: number;
+}> = ({config: c, frame, fps}) => {
   const entrance = spring({
     frame: frame - 4,
     fps,
     config: {damping: 16, stiffness: 110, mass: 1},
   });
+
   const drop = interpolate(entrance, [0, 1], [3, 0]);
 
-  // Gerakan halus: bobbing dan sedikit goyangan
   const bob = Math.sin(frame * 0.09) * 0.02;
   const sway = Math.sin(frame * 0.05) * 0.012;
-
-  // Putaran roda
   const spin = frame * 0.2;
 
   const R = c.wheelRadius;
   const tire = R * 0.22;
-  const hubY = R + tire; // pusat roda; sisi bawah ban tepat di y = 0
+  const hubY = R + tire;
+
   const L = c.bodyLength;
   const W = c.bodyWidth;
   const H = c.bodyHeight;
   const CH = c.cabinHeight;
+
   const axleX = L * 0.3;
   const axleZ = W / 2 + tire * 0.6;
 
   const renderWheel = (x: number, z: number, key: string) => (
     <group key={key} position={[x, hubY, z]}>
       <group rotation={[0, 0, spin]}>
-        {/* Ban */}
         <mesh>
           <torusGeometry args={[R, tire, 14, 40]} />
-          <meshStandardMaterial color={c.wheelColor} roughness={0.9} />
+          <meshStandardMaterial
+            color={c.wheelColor}
+            roughness={0.9}
+          />
         </mesh>
-        {/* Velg */}
+
         <mesh>
           <torusGeometry args={[R * 0.7, tire * 0.35, 10, 36]} />
           <meshStandardMaterial
@@ -190,9 +212,13 @@ const Car: React.FC<{config: SceneConfig; frame: number; fps: number}> = ({
             roughness={0.3}
           />
         </mesh>
+
         {c.spokes ? (
           Array.from({length: 6}, (_, i) => (
-            <mesh key={`spoke-${i}`} rotation={[0, 0, (i * Math.PI) / 3]}>
+            <mesh
+              key={`spoke-${i}`}
+              rotation={[0, 0, (i * Math.PI) / 3]}
+            >
               <boxGeometry args={[R * 1.4, R * 0.1, R * 0.1]} />
               <meshStandardMaterial
                 color={c.trimColor}
@@ -203,7 +229,9 @@ const Car: React.FC<{config: SceneConfig; frame: number; fps: number}> = ({
           ))
         ) : (
           <mesh rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[R * 0.7, R * 0.7, tire * 0.4, 32]} />
+            <cylinderGeometry
+              args={[R * 0.7, R * 0.7, tire * 0.4, 32]}
+            />
             <meshStandardMaterial
               color={c.trimColor}
               metalness={0.8}
@@ -211,9 +239,11 @@ const Car: React.FC<{config: SceneConfig; frame: number; fps: number}> = ({
             />
           </mesh>
         )}
-        {/* Hub */}
+
         <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[R * 0.18, R * 0.18, tire * 1.2, 20]} />
+          <cylinderGeometry
+            args={[R * 0.18, R * 0.18, tire * 1.2, 20]}
+          />
           <meshStandardMaterial
             color={c.trimColor}
             metalness={0.8}
@@ -226,7 +256,6 @@ const Car: React.FC<{config: SceneConfig; frame: number; fps: number}> = ({
 
   return (
     <>
-      {/* Bayangan kontak di tanah; makin tipis saat mobil masih melayang */}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, 0.01, 0]}
@@ -240,7 +269,10 @@ const Car: React.FC<{config: SceneConfig; frame: number; fps: number}> = ({
         />
       </mesh>
 
-      <group position={[0, drop + bob, 0]} rotation={[0, 0, sway]}>
+      <group
+        position={[0, drop + bob, 0]}
+        rotation={[0, 0, sway]}
+      >
         {/* Badan utama */}
         <mesh position={[0, hubY + H / 2, 0]}>
           <boxGeometry args={[L, H, W]} />
@@ -275,7 +307,11 @@ const Car: React.FC<{config: SceneConfig; frame: number; fps: number}> = ({
         {[-1, 1].map((side) => (
           <mesh
             key={`head-${side}`}
-            position={[L / 2 + 0.04, hubY + H * 0.7, side * W * 0.3]}
+            position={[
+              L / 2 + 0.04,
+              hubY + H * 0.7,
+              side * W * 0.3,
+            ]}
           >
             <sphereGeometry args={[0.07, 16, 16]} />
             <meshStandardMaterial
@@ -286,7 +322,7 @@ const Car: React.FC<{config: SceneConfig; frame: number; fps: number}> = ({
           </mesh>
         ))}
 
-        {/* Garis cahaya di bawah bodi (mobil listrik) */}
+        {/* Cahaya bawah bodi */}
         {c.glow && (
           <mesh position={[0, hubY - 0.03, 0]}>
             <boxGeometry args={[L * 0.95, 0.04, W * 1.02]} />
@@ -301,15 +337,19 @@ const Car: React.FC<{config: SceneConfig; frame: number; fps: number}> = ({
         {/* Empat roda */}
         {[-1, 1].map((sx) =>
           [-1, 1].map((sz) =>
-            renderWheel(sx * axleX, hubY, sz * axleZ, `wheel-${sx}-${sz}`)
-          )
+            renderWheel(
+              sx * axleX,
+              sz * axleZ,
+              `wheel-${sx}-${sz}`,
+            ),
+          ),
         )}
       </group>
     </>
   );
 };
 
-/* -------------------------------- Scene ------------------------------- */
+/* -------------------------------- SCENE -------------------------------- */
 
 export const Scene: React.FC<SceneProps> = ({
   config,
@@ -320,17 +360,33 @@ export const Scene: React.FC<SceneProps> = ({
   const frame = useCurrentFrame();
   const {fps, width, height} = useVideoConfig();
 
-  const titleIn = spring({frame: frame - 10, fps, config: {damping: 200}});
-  const captionIn = spring({frame: frame - 26, fps, config: {damping: 200}});
+  const titleIn = spring({
+    frame: frame - 10,
+    fps,
+    config: {damping: 200},
+  });
+
+  const captionIn = spring({
+    frame: frame - 26,
+    fps,
+    config: {damping: 200},
+  });
 
   const fadeIn = interpolate(frame, [0, 14], [1, 0], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
-  const fadeOut = interpolate(frame, [duration - 14, duration], [0, 1], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
+
+  const fadeOut = interpolate(
+    frame,
+    [duration - 14, duration],
+    [0, 1],
+    {
+      extrapolateLeft: 'clamp',
+      extrapolateRight: 'clamp',
+    },
+  );
+
   const overlayOpacity = Math.max(fadeIn, fadeOut);
 
   return (
@@ -340,7 +396,11 @@ export const Scene: React.FC<SceneProps> = ({
         <ThreeCanvas width={width} height={height}>
           <Environment config={config} frame={frame} />
           <Lights config={config} frame={frame} />
-          <Camera config={config} frame={frame} duration={duration} />
+          <Camera
+            config={config}
+            frame={frame}
+            duration={duration}
+          />
           <Car config={config} frame={frame} fps={fps} />
         </ThreeCanvas>
       </AbsoluteFill>
@@ -360,7 +420,11 @@ export const Scene: React.FC<SceneProps> = ({
           style={{
             textAlign: 'center',
             opacity: titleIn,
-            transform: `translateY(${interpolate(titleIn, [0, 1], [50, 0])}px)`,
+            transform: `translateY(${interpolate(
+              titleIn,
+              [0, 1],
+              [50, 0],
+            )}px)`,
           }}
         >
           <div
@@ -373,7 +437,14 @@ export const Scene: React.FC<SceneProps> = ({
           >
             {config.year}
           </div>
-          <div style={{fontSize: 70, fontWeight: 800, marginTop: 10}}>
+
+          <div
+            style={{
+              fontSize: 70,
+              fontWeight: 800,
+              marginTop: 10,
+            }}
+          >
             {config.title}
           </div>
         </div>
@@ -383,12 +454,23 @@ export const Scene: React.FC<SceneProps> = ({
             textAlign: 'center',
             maxWidth: 880,
             opacity: captionIn,
-            transform: `translateY(${interpolate(captionIn, [0, 1], [40, 0])}px)`,
+            transform: `translateY(${interpolate(
+              captionIn,
+              [0, 1],
+              [40, 0],
+            )}px)`,
           }}
         >
-          <div style={{fontSize: 44, lineHeight: 1.35, fontWeight: 500}}>
+          <div
+            style={{
+              fontSize: 44,
+              lineHeight: 1.35,
+              fontWeight: 500,
+            }}
+          >
             {config.caption}
           </div>
+
           <div
             style={{
               display: 'flex',
@@ -405,7 +487,9 @@ export const Scene: React.FC<SceneProps> = ({
                   height: 16,
                   borderRadius: 8,
                   backgroundColor:
-                    i === index ? config.accent : 'rgba(255,255,255,0.35)',
+                    i === index
+                      ? config.accent
+                      : 'rgba(255,255,255,0.35)',
                 }}
               />
             ))}
@@ -413,8 +497,13 @@ export const Scene: React.FC<SceneProps> = ({
         </div>
       </AbsoluteFill>
 
-      {/* Transisi hitam di awal dan akhir scene */}
-      <AbsoluteFill style={{backgroundColor: '#000000', opacity: overlayOpacity}} />
+      {/* Transisi hitam */}
+      <AbsoluteFill
+        style={{
+          backgroundColor: '#000000',
+          opacity: overlayOpacity,
+        }}
+      />
     </AbsoluteFill>
   );
 };

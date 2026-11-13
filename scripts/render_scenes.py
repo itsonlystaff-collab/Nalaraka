@@ -1320,8 +1320,6 @@ for scene in selected_scenes:
         f"Scene tidak dikenal: {scene}"
     )
 
-selected_scenes = normalized_scenes
-
     selected_scenes = [
         item
         for item in SCENES_TIMELINE

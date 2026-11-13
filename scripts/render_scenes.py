@@ -1,3 +1,6 @@
+    valid_scenes = {scene_id for scene_id, _, _ in SCENES_TIMELINE}
+    invalid_scenes = scene_filter - valid_scenes
+
     if invalid_scenes:
         raise ValueError(f"Scene tidak dikenal: {sorted(invalid_scenes)}")
 
@@ -63,12 +66,16 @@
         # Output MP4
         out_mp4 = os.path.join(OUTPUT_DIR, f"{scene_id}.mp4")
 
+        # Pastikan direktori output tersedia sebelum Blender mulai render.
+        os.makedirs(os.path.dirname(out_mp4), exist_ok=True)
+
         # Configure render
         configure_render(
             out_mp4,
             f_start,
             f_end - 1
         )
+        print(f"MP4 TARGET: {out_mp4}", flush=True)
 
         # Render animation
         print(
@@ -77,6 +84,9 @@
         )
 
         bpy.ops.render.render(animation=True)
+
+        # Diagnostik: tampilkan file yang benar-benar dibuat Blender.
+        print(f"OUTPUT DIRECTORY CONTENTS: {os.listdir(OUTPUT_DIR)}", flush=True)
 
         # Verify output
         if not os.path.isfile(out_mp4):

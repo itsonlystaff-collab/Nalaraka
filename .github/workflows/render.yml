@@ -11,12 +11,12 @@ on:
       samples:
         description: 'Render samples per frame'
         required: false
-        default: '32'
+        default: '8'
 
 jobs:
   render-video:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
 
     steps:
       - name: Checkout Repository
@@ -43,7 +43,7 @@ jobs:
       - name: Build & Render 10 Low-Poly 3D Scenes
         env:
           RENDER_ENGINE: ${{ github.event.inputs.render_engine || 'BLENDER_EEVEE_NEXT' }}
-          RENDER_SAMPLES: ${{ github.event.inputs.samples || '32' }}
+          RENDER_SAMPLES: ${{ github.event.inputs.samples || '8' }}
         run: |
           mkdir -p renders/scenes renders/final renders/qc
           xvfb-run -a blender --background --python scripts/render_scenes.py

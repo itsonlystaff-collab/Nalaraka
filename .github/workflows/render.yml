@@ -18,6 +18,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
+jobs:
+  render-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - chunk: 1
+            scenes: "scene_01,scene_02"
+          - chunk: 2
+            scenes: "scene_03,scene_04"
+          - chunk: 3
+            scenes: "scene_05,scene_06"
+          - chunk: 4
+            scenes: "scene_07,scene_08"
+          - chunk: 5
+            scenes: "scene_09,scene_10"
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4

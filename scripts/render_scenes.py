@@ -18,7 +18,7 @@ RENDER_ENGINE = os.environ.get(
 )
 
 RENDER_SAMPLES = int(
-    os.environ.get("RENDER_SAMPLES", "8")
+    os.environ.get("RENDER_SAMPLES", "4")
 )
 
 

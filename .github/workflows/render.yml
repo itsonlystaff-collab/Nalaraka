@@ -1,23 +1,71 @@
+
+name: Render Jakarta Low-Poly 3D Animation (1080x1920)
+
+on:
+  workflow_dispatch:
+    inputs:
+      render_engine:
+        description: 'Blender Render Engine'
+        required: false
+        default: 'BLENDER_EEVEE_NEXT'
+      samples:
+        description: 'Render samples per frame'
+        required: false
+        default: '8'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  render-video:
+    name: Render All 10 Scenes (Single Job)
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Render Directories
+        run: |
+          set -euo pipefail
+
           mkdir -p "$GITHUB_WORKSPACE/renders/final"
           mkdir -p "$GITHUB_WORKSPACE/renders/qc"
+          mkdir -p "$GITHUB_WORKSPACE/renders/scenes"
+
           test -f scripts/render_scenes.py || {
             echo "ERROR: scripts/render_scenes.py tidak ditemukan"
             exit 1
           }
 
-      - name: Build & Render Assigned Scenes
+      - name: Install Blender & Dependencies
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+          sudo apt-get install -y blender xvfb ffmpeg
+
+          blender --version
+          ffmpeg -version
+
+      - name: Build & Render All Scenes
         env:
-          SCENE_FILTER: ${{ matrix.scenes }}
+          SCENE_FILTER: "1,2,3,4,5,6,7,8,9,10"
           RENDER_ENGINE: ${{ inputs.render_engine || 'BLENDER_EEVEE_NEXT' }}
           RENDER_SAMPLES: ${{ inputs.samples || '8' }}
           RENDER_OUTPUT_DIR: ${{ github.workspace }}/renders/scenes
+
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
 
           echo "================================"
-          echo "GROUP: ${{ matrix.chunk }}"
-          echo "SCENES: $SCENE_FILTER"
+          echo "RENDER MODE: SINGLE JOB"
+          echo "SCENES: ALL 10 SCENES"
+          echo "ENGINE: $RENDER_ENGINE"
+          echo "SAMPLES: $RENDER_SAMPLES"
           echo "OUTPUT: $RENDER_OUTPUT_DIR"
           echo "================================"
 
@@ -25,22 +73,34 @@
             --background \
             --python "$GITHUB_WORKSPACE/scripts/render_scenes.py"
 
-          echo "=== MP4 FILES AFTER BLENDER ==="
-          find "$RENDER_OUTPUT_DIR" -maxdepth 1 -type f -iname '*.mp4' -printf '%f (%s bytes)\n'
+          echo "================================"
+          echo "VERIFY RENDER OUTPUT"
+          echo "================================"
 
-          count=$(find "$RENDER_OUTPUT_DIR" -maxdepth 1 -type f -iname '*.mp4' | wc -l)
-          if [ "$count" -eq 0 ]; then
-            echo "ERROR: Blender selesai tetapi tidak menghasilkan MP4."
-            echo "Periksa log START RENDER / MP4 TARGET dari script Python."
+          find "$RENDER_OUTPUT_DIR" \
+            -maxdepth 1 \
+            -type f \
+            -iname '*.mp4' \
+            -printf '%f (%s bytes)\n'
+
+          count=$(find "$RENDER_OUTPUT_DIR" \
+            -maxdepth 1 \
+            -type f \
+            -iname '*.mp4' | wc -l)
+
+          if [ "$count" -ne 10 ]; then
+            echo "ERROR: Seharusnya menghasilkan 10 MP4."
+            echo "Ditemukan: $count"
             exit 1
           fi
 
-      # Selalu unggah hasil parsial untuk membantu diagnosis jika render gagal.
-      - name: Upload Group Render Results
+          echo "SUCCESS: All 10 scenes rendered."
+
+      - name: Upload All Render Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rendered-scenes-${{ matrix.chunk }}
+          name: rendered-scenes-all
           path: renders/scenes/*.mp4
           if-no-files-found: warn
           retention-days: 1
@@ -58,19 +118,23 @@
 
       - name: Install FFmpeg
         run: |
+          set -euo pipefail
+
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      - name: Download All Group Results
+          ffmpeg -version
+
+      - name: Download All Render Results
         uses: actions/download-artifact@v4
         with:
-          pattern: rendered-scenes-*
+          name: rendered-scenes-all
           path: renders/scenes
-          merge-multiple: true
 
       - name: Verify All 10 Scenes
         run: |
           set -euo pipefail
+
           echo "Checking rendered scenes..."
 
           for i in $(seq -w 1 10); do
@@ -79,7 +143,13 @@
             if [ ! -s "$file" ]; then
               echo "ERROR: Missing or empty $file"
               echo "Available MP4 files:"
-              find renders/scenes -maxdepth 1 -type f -name '*.mp4' -print
+
+              find renders/scenes \
+                -maxdepth 1 \
+                -type f \
+                -name '*.mp4' \
+                -print
+
               exit 1
             fi
 
@@ -90,25 +160,34 @@
 
       - name: Mix Audio & Concatenate Scenes
         run: |
+          set -euo pipefail
+
           chmod +x scripts/mix_audio.sh
           bash scripts/mix_audio.sh
 
       - name: Quality Control
         run: |
           set -euo pipefail
+
           mkdir -p renders/final renders/qc
 
           test -s renders/final/jakarta_lowpoly_1080x1920.mp4
+
+          echo "=== FINAL VIDEO INFORMATION ==="
 
           ffprobe -v error \
             -show_entries format=duration:stream=codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,nb_frames \
             -of default=nw=1 \
             renders/final/jakarta_lowpoly_1080x1920.mp4
 
+          echo "=== GENERATING QC FRAMES ==="
+
           ffmpeg -y \
             -i renders/final/jakarta_lowpoly_1080x1920.mp4 \
             -vf "fps=1/5,scale=540:-1" \
             renders/qc/preview_%02d.png
+
+          echo "QUALITY CONTROL COMPLETED."
 
       - name: Upload Final MP4 & QC Frames
         uses: actions/upload-artifact@v4

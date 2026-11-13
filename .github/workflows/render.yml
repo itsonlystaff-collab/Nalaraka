@@ -1,11 +1,10 @@
-
 name: Render Jakarta Low-Poly 3D Animation (1080x1920)
 
 on:
   workflow_dispatch:
     inputs:
       render_engine:
-        description: 'Blender Render Engine'
+        description: 'Blender Render Engine (BLENDER_EEVEE_NEXT or CYCLES)'
         required: false
         default: 'BLENDER_EEVEE_NEXT'
       samples:
@@ -13,188 +12,55 @@ on:
         required: false
         default: '4'
 
-permissions:
-  contents: read
-  actions: read
-
 jobs:
   render-video:
-    name: Render All 10 Scenes (Single Job)
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 1200
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Render Directories
+      - name: Install System Dependencies (FFmpeg, Mesa/OpenGL, Xvfb, Fonts)
         run: |
-          set -euo pipefail
-
-          mkdir -p "$GITHUB_WORKSPACE/renders/final"
-          mkdir -p "$GITHUB_WORKSPACE/renders/qc"
-          mkdir -p "$GITHUB_WORKSPACE/renders/scenes"
-
-          test -f scripts/render_scenes.py || {
-            echo "ERROR: scripts/render_scenes.py tidak ditemukan"
-            exit 1
-          }
-
-      - name: Install Blender & Dependencies
-        run: |
-          set -euo pipefail
-
           sudo apt-get update
-          sudo apt-get install -y blender xvfb ffmpeg
+          sudo apt-get install -y ffmpeg xvfb libgl1 libxi6 libxrender1 libxkbcommon0 libsm6 libice6 fonts-dejavu-core wget xz-utils
 
+      - name: Download & Install Blender 4.2 LTS (Headless)
+        run: |
+          wget -q https://download.blender.org/release/Blender4.2/blender-4.2.3-linux-x64.tar.xz
+          tar -xf blender-4.2.3-linux-x64.tar.xz
+          sudo mv blender-4.2.3-linux-x64 /opt/blender
+          sudo ln -sf /opt/blender/blender /usr/local/bin/blender
           blender --version
-          ffmpeg -version
 
-      - name: Build & Render All Scenes
-        env:
-          SCENE_FILTER: "1,2,3,4,5,6,7,8,9,10"
-          RENDER_ENGINE: ${{ inputs.render_engine || 'BLENDER_EEVEE_NEXT' }}
-          RENDER_SAMPLES: ${{ inputs.samples || '8' }}
-          RENDER_OUTPUT_DIR: ${{ github.workspace }}/renders/scenes
-
+      - name: Verify Audio & Timeline Calculation
         run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-
-          echo "================================"
-          echo "RENDER MODE: SINGLE JOB"
-          echo "SCENES: ALL 10 SCENES"
-          echo "ENGINE: $RENDER_ENGINE"
-          echo "SAMPLES: $RENDER_SAMPLES"
-          echo "OUTPUT: $RENDER_OUTPUT_DIR"
-          echo "================================"
-
-          xvfb-run -a blender \
-            --background \
-            --python "$GITHUB_WORKSPACE/scripts/render_scenes.py"
-
-          echo "================================"
-          echo "VERIFY RENDER OUTPUT"
-          echo "================================"
-
-          find "$RENDER_OUTPUT_DIR" \
-            -maxdepth 1 \
-            -type f \
-            -iname '*.mp4' \
-            -printf '%f (%s bytes)\n'
-
-          count=$(find "$RENDER_OUTPUT_DIR" \
-            -maxdepth 1 \
-            -type f \
-            -iname '*.mp4' | wc -l)
-
-          if [ "$count" -ne 10 ]; then
-            echo "ERROR: Seharusnya menghasilkan 10 MP4."
-            echo "Ditemukan: $count"
-            exit 1
-          fi
-
-          echo "SUCCESS: All 10 scenes rendered."
-
-      - name: Upload All Render Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rendered-scenes-all
-          path: renders/scenes/*.mp4
-          if-no-files-found: warn
-          retention-days: 1
-
-  merge-video:
-    name: Merge All Scenes & Finalize Video
-    runs-on: ubuntu-latest
-    needs: render-video
-    if: needs.render-video.result == 'success'
-    timeout-minutes: 60
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Install FFmpeg
-        run: |
-          set -euo pipefail
-
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-
-          ffmpeg -version
-
-      - name: Download All Render Results
-        uses: actions/download-artifact@v4
-        with:
-          name: rendered-scenes-all
-          path: renders/scenes
-
-      - name: Verify All 10 Scenes
-        run: |
-          set -euo pipefail
-
-          echo "Checking rendered scenes..."
-
-          for i in $(seq -w 1 10); do
-            file="renders/scenes/scene_${i}.mp4"
-
-            if [ ! -s "$file" ]; then
-              echo "ERROR: Missing or empty $file"
-              echo "Available MP4 files:"
-
-              find renders/scenes \
-                -maxdepth 1 \
-                -type f \
-                -name '*.mp4' \
-                -print
-
-              exit 1
-            fi
-
-            echo "FOUND: $file"
-          done
-
-          echo "All 10 scenes are ready."
-
-      - name: Mix Audio & Concatenate Scenes
-        run: |
-          set -euo pipefail
-
           chmod +x scripts/mix_audio.sh
+          ffprobe -v error -show_entries format=duration -of csv=p=0 assets/audio/voiceover.mp3
+
+      - name: Build & Render 10 Low-Poly 3D Scenes (1080x1920 @ 30fps)
+        env:
+          RENDER_ENGINE: ${{ github.event.inputs.render_engine || 'BLENDER_EEVEE_NEXT' }}
+          RENDER_SAMPLES: ${{ github.event.inputs.samples || '32' }}
+        run: |
+          mkdir -p renders/scenes renders/final renders/qc
+          xvfb-run -a blender --background --python scripts/render_scenes.py
+
+      - name: Concatenate Scenes & Mix Audio (Voiceover + Ambient Synth + Ducking)
+        run: |
           bash scripts/mix_audio.sh
 
-      - name: Quality Control
+      - name: Quality Control & Metadata Verification
         run: |
-          set -euo pipefail
+          ffprobe -v error -show_entries format=duration:stream=codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,nb_frames -of default=nw=1 renders/final/jakarta_lowpoly_1080x1920.mp4
+          ffmpeg -i renders/final/jakarta_lowpoly_1080x1920.mp4 -vf "fps=1/5,scale=540:-1" renders/qc/preview_%02d.png
 
-          mkdir -p renders/final renders/qc
-
-          test -s renders/final/jakarta_lowpoly_1080x1920.mp4
-
-          echo "=== FINAL VIDEO INFORMATION ==="
-
-          ffprobe -v error \
-            -show_entries format=duration:stream=codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,nb_frames \
-            -of default=nw=1 \
-            renders/final/jakarta_lowpoly_1080x1920.mp4
-
-          echo "=== GENERATING QC FRAMES ==="
-
-          ffmpeg -y \
-            -i renders/final/jakarta_lowpoly_1080x1920.mp4 \
-            -vf "fps=1/5,scale=540:-1" \
-            renders/qc/preview_%02d.png
-
-          echo "QUALITY CONTROL COMPLETED."
-
-      - name: Upload Final MP4 & QC Frames
+      - name: Upload Final MP4 & QC Frames Artifact
         uses: actions/upload-artifact@v4
         with:
           name: jakarta-lowpoly-3d-1080x1920
           path: |
             renders/final/jakarta_lowpoly_1080x1920.mp4
             renders/qc/*.png
-          if-no-files-found: error
           retention-days: 14

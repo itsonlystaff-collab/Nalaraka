@@ -11,7 +11,7 @@ on:
       samples:
         description: 'Render samples per frame'
         required: false
-        default: '8'
+        default: '4'
 
 permissions:
   contents: read

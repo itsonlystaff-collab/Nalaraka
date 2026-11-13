@@ -1,98 +1,55 @@
-
-name: Render Jakarta Low-Poly 3D Animation (1080x1920)
-
-on:
-  workflow_dispatch:
-    inputs:
-      render_engine:
-        description: 'Blender Render Engine'
-        required: false
-        default: 'BLENDER_EEVEE_NEXT'
-      samples:
-        description: 'Render samples per frame'
-        required: false
-        default: '8'
-
-permissions:
-  contents: read
-  actions: read
-
-jobs:
-  render-video:
-    name: Render Group ${{ matrix.chunk }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
-
-    strategy:
-      fail-fast: false
-      max-parallel: 5
-      matrix:
-        include:
-          - chunk: 1
-            scenes: "scene_01,scene_02"
-          - chunk: 2
-            scenes: "scene_03,scene_04"
-          - chunk: 3
-            scenes: "scene_05,scene_06"
-          - chunk: 4
-            scenes: "scene_07,scene_08"
-          - chunk: 5
-            scenes: "scene_09,scene_10"
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            xvfb libegl1 libgl1 libgbm1 libgles2 \
-            libxi6 libxrender1 libxkbcommon0 \
-            libsm6 libice6 libglib2.0-0 libgomp1 \
-            fonts-dejavu-core wget xz-utils
-
-      - name: Install Blender 4.2.3
-        run: |
-          wget -q https://download.blender.org/release/Blender4.2/blender-4.2.3-linux-x64.tar.xz
-          tar -xf blender-4.2.3-linux-x64.tar.xz
-          sudo mv blender-4.2.3-linux-x64 /opt/blender
-          sudo ln -sf /opt/blender/blender /usr/local/bin/blender
-          blender --version
-
-      - name: Prepare Render Directories
-        run: |
-          mkdir -p renders/scenes
-          mkdir -p renders/final
-          mkdir -p renders/qc
+          mkdir -p "$GITHUB_WORKSPACE/renders/final"
+          mkdir -p "$GITHUB_WORKSPACE/renders/qc"
+          test -f scripts/render_scenes.py || {
+            echo "ERROR: scripts/render_scenes.py tidak ditemukan"
+            exit 1
+          }
 
       - name: Build & Render Assigned Scenes
         env:
           SCENE_FILTER: ${{ matrix.scenes }}
-          RENDER_ENGINE: ${{ github.event.inputs.render_engine || 'BLENDER_EEVEE_NEXT' }}
-          RENDER_SAMPLES: ${{ github.event.inputs.samples || '8' }}
+          RENDER_ENGINE: ${{ inputs.render_engine || 'BLENDER_EEVEE_NEXT' }}
+          RENDER_SAMPLES: ${{ inputs.samples || '8' }}
+          RENDER_OUTPUT_DIR: ${{ github.workspace }}/renders/scenes
         run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+
           echo "================================"
           echo "GROUP: ${{ matrix.chunk }}"
           echo "SCENES: $SCENE_FILTER"
+          echo "OUTPUT: $RENDER_OUTPUT_DIR"
           echo "================================"
 
           xvfb-run -a blender \
             --background \
-            --python scripts/render_scenes.py
+            --python "$GITHUB_WORKSPACE/scripts/render_scenes.py"
 
+          echo "=== MP4 FILES AFTER BLENDER ==="
+          find "$RENDER_OUTPUT_DIR" -maxdepth 1 -type f -iname '*.mp4' -printf '%f (%s bytes)\n'
+
+          count=$(find "$RENDER_OUTPUT_DIR" -maxdepth 1 -type f -iname '*.mp4' | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "ERROR: Blender selesai tetapi tidak menghasilkan MP4."
+            echo "Periksa log START RENDER / MP4 TARGET dari script Python."
+            exit 1
+          fi
+
+      # Selalu unggah hasil parsial untuk membantu diagnosis jika render gagal.
       - name: Upload Group Render Results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: rendered-scenes-${{ matrix.chunk }}
           path: renders/scenes/*.mp4
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 1
 
   merge-video:
     name: Merge All Scenes & Finalize Video
     runs-on: ubuntu-latest
     needs: render-video
+    if: needs.render-video.result == 'success'
     timeout-minutes: 60
 
     steps:
@@ -113,13 +70,16 @@ jobs:
 
       - name: Verify All 10 Scenes
         run: |
+          set -euo pipefail
           echo "Checking rendered scenes..."
 
           for i in $(seq -w 1 10); do
             file="renders/scenes/scene_${i}.mp4"
 
             if [ ! -s "$file" ]; then
-              echo "ERROR: Missing $file"
+              echo "ERROR: Missing or empty $file"
+              echo "Available MP4 files:"
+              find renders/scenes -maxdepth 1 -type f -name '*.mp4' -print
               exit 1
             fi
 
@@ -135,7 +95,10 @@ jobs:
 
       - name: Quality Control
         run: |
+          set -euo pipefail
           mkdir -p renders/final renders/qc
+
+          test -s renders/final/jakarta_lowpoly_1080x1920.mp4
 
           ffprobe -v error \
             -show_entries format=duration:stream=codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,nb_frames \

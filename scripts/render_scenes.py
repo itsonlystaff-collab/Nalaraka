@@ -430,7 +430,7 @@ def main():
         if item.strip()
     }
 
-    if not scene_filter:
+   if not scene_filter:
     raise RuntimeError(
         "SCENE_FILTER kosong! "
         "Render dibatalkan untuk mencegah render semua scene berulang."
@@ -447,10 +447,10 @@ def main():
             f"Scene tidak dikenal: {sorted(invalid_scenes)}"
         )
 
-    selected_scenes = [
-        item
-        for item in SCENES_TIMELINE
-        if not scene_filter or item[0] in scene_filter
+   selected_scenes = [
+    item
+    for item in SCENES_TIMELINE
+    if item[0] in scene_filter   
     ]
 
     if not selected_scenes:

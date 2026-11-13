@@ -1277,12 +1277,50 @@ def main():
     else:
         scene_filter = valid_scenes.copy()
 
-    invalid_scenes = scene_filter - valid_scenes
+    # ==========================================================
+# NORMALIZE SCENE SELECTION
+# ==========================================================
 
-    if invalid_scenes:
-        raise ValueError(
-            f"Scene tidak dikenal: {sorted(invalid_scenes)}"
+all_scene_names = list(SCENES.keys())
+
+normalized_scenes = []
+
+for scene in selected_scenes:
+    scene = str(scene).strip()
+
+    # Support numeric scene IDs: 1, 2, 3 ... 10
+    if scene.isdigit():
+        scene_number = int(scene)
+
+        possible_names = [
+            f"scene_{scene_number:02d}",
+            f"Scene_{scene_number:02d}",
+            f"SCENE_{scene_number:02d}",
+            f"scene_{scene_number}",
+        ]
+
+        matched = next(
+            (
+                name for name in possible_names
+                if name in SCENES
+            ),
+            None
         )
+
+        if matched:
+            normalized_scenes.append(matched)
+            continue
+
+    # Support exact scene names
+    if scene in SCENES:
+        normalized_scenes.append(scene)
+        continue
+
+    raise ValueError(
+        f"Scene tidak dikenal: {scene}"
+    )
+
+selected_scenes = normalized_scenes
 
     selected_scenes = [
         item

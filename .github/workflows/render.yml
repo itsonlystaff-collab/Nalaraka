@@ -1,0 +1,66 @@
+name: Render Jakarta Low-Poly 3D Animation (1080x1920)
+
+on:
+  workflow_dispatch:
+    inputs:
+      render_engine:
+        description: 'Blender Render Engine (BLENDER_EEVEE_NEXT or CYCLES)'
+        required: false
+        default: 'BLENDER_EEVEE_NEXT'
+      samples:
+        description: 'Render samples per frame'
+        required: false
+        default: '32'
+
+jobs:
+  render-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install System Dependencies (FFmpeg, Mesa/OpenGL, Xvfb, Fonts)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg xvfb libgl1 libxi6 libxrender1 libxkbcommon0 libsm6 libice6 fonts-dejavu-core wget xz-utils
+
+      - name: Download & Install Blender 4.2 LTS (Headless)
+        run: |
+          wget -q https://download.blender.org/release/Blender4.2/blender-4.2.3-linux-x64.tar.xz
+          tar -xf blender-4.2.3-linux-x64.tar.xz
+          sudo mv blender-4.2.3-linux-x64 /opt/blender
+          sudo ln -sf /opt/blender/blender /usr/local/bin/blender
+          blender --version
+
+      - name: Verify Audio & Timeline Calculation
+        run: |
+          chmod +x scripts/mix_audio.sh
+          ffprobe -v error -show_entries format=duration -of csv=p=0 assets/audio/voiceover.mp3
+
+      - name: Build & Render 10 Low-Poly 3D Scenes (1080x1920 @ 30fps)
+        env:
+          RENDER_ENGINE: ${{ github.event.inputs.render_engine || 'BLENDER_EEVEE_NEXT' }}
+          RENDER_SAMPLES: ${{ github.event.inputs.samples || '32' }}
+        run: |
+          mkdir -p renders/scenes renders/final renders/qc
+          xvfb-run -a blender --background --python scripts/render_scenes.py
+
+      - name: Concatenate Scenes & Mix Audio (Voiceover + Ambient Synth + Ducking)
+        run: |
+          bash scripts/mix_audio.sh
+
+      - name: Quality Control & Metadata Verification
+        run: |
+          ffprobe -v error -show_entries format=duration:stream=codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,nb_frames -of default=nw=1 renders/final/jakarta_lowpoly_1080x1920.mp4
+          ffmpeg -i renders/final/jakarta_lowpoly_1080x1920.mp4 -vf "fps=1/5,scale=540:-1" renders/qc/preview_%02d.png
+
+      - name: Upload Final MP4 & QC Frames Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jakarta-lowpoly-3d-1080x1920
+          path: |
+            renders/final/jakarta_lowpoly_1080x1920.mp4
+            renders/qc/*.png
+          retention-days: 14

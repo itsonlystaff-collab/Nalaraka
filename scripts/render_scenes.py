@@ -430,6 +430,12 @@ def main():
         if item.strip()
     }
 
+    if not scene_filter:
+    raise RuntimeError(
+        "SCENE_FILTER kosong! "
+        "Render dibatalkan untuk mencegah render semua scene berulang."
+    )
+
     valid_scenes = {
         scene_id for scene_id, _, _ in SCENES_TIMELINE
     }

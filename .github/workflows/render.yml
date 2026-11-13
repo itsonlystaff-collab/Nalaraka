@@ -1,3 +1,4 @@
+
 name: Render Jakarta Low-Poly 3D Animation (1080x1920)
 
 on:
@@ -12,50 +13,139 @@ on:
         required: false
         default: '4'
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   render-video:
     runs-on: ubuntu-latest
     timeout-minutes: 1200
 
     steps:
+      # ==========================================
+      # CHECKOUT
+      # ==========================================
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install System Dependencies (FFmpeg, Mesa/OpenGL, Xvfb, Fonts)
+      # ==========================================
+      # INSTALL SYSTEM DEPENDENCIES
+      # ==========================================
+      - name: Install System Dependencies (FFmpeg, EGL, Mesa, OpenGL, Xvfb, Fonts)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg xvfb libgl1 libxi6 libxrender1 libxkbcommon0 libsm6 libice6 fonts-dejavu-core wget xz-utils
 
+          sudo apt-get install -y \
+            ffmpeg \
+            xvfb \
+            libegl1 \
+            libegl-mesa0 \
+            libgl1 \
+            libglx-mesa0 \
+            libgles2 \
+            libopengl0 \
+            libxi6 \
+            libxrender1 \
+            libxkbcommon0 \
+            libsm6 \
+            libice6 \
+            libxext6 \
+            libxfixes3 \
+            libxxf86vm1 \
+            fonts-dejavu-core \
+            wget \
+            xz-utils
+
+      # ==========================================
+      # INSTALL BLENDER 4.2 LTS
+      # ==========================================
       - name: Download & Install Blender 4.2 LTS (Headless)
         run: |
           wget -q https://download.blender.org/release/Blender4.2/blender-4.2.3-linux-x64.tar.xz
+
           tar -xf blender-4.2.3-linux-x64.tar.xz
+
           sudo mv blender-4.2.3-linux-x64 /opt/blender
+
           sudo ln -sf /opt/blender/blender /usr/local/bin/blender
+
           blender --version
 
+      # ==========================================
+      # VERIFY EGL / OPENGL
+      # ==========================================
+      - name: Verify EGL and OpenGL Libraries
+        run: |
+          ldconfig -p | grep -E 'libEGL.so.1|libGL.so.1'
+
+          ldd /opt/blender/blender | grep "not found" && exit 1 || true
+
+      # ==========================================
+      # VERIFY AUDIO
+      # ==========================================
       - name: Verify Audio & Timeline Calculation
         run: |
           chmod +x scripts/mix_audio.sh
-          ffprobe -v error -show_entries format=duration -of csv=p=0 assets/audio/voiceover.mp3
 
+          ffprobe -v error \
+            -show_entries format=duration \
+            -of csv=p=0 \
+            assets/audio/voiceover.mp3
+
+      # ==========================================
+      # BUILD & RENDER SCENES
+      # ==========================================
       - name: Build & Render 10 Low-Poly 3D Scenes (1080x1920 @ 30fps)
         env:
           RENDER_ENGINE: ${{ github.event.inputs.render_engine || 'BLENDER_EEVEE_NEXT' }}
-          RENDER_SAMPLES: ${{ github.event.inputs.samples || '32' }}
+          RENDER_SAMPLES: ${{ github.event.inputs.samples || '4' }}
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          PYOPENGL_PLATFORM: "egl"
         run: |
-          mkdir -p renders/scenes renders/final renders/qc
-          xvfb-run -a blender --background --python scripts/render_scenes.py
+          set -euo pipefail
 
+          mkdir -p renders/scenes renders/final renders/qc
+
+          echo "================================"
+          echo "RENDER ENGINE: $RENDER_ENGINE"
+          echo "RENDER SAMPLES: $RENDER_SAMPLES"
+          echo "RESOLUTION: 1080x1920"
+          echo "FPS: 30"
+          echo "================================"
+
+          xvfb-run -a blender \
+            --background \
+            --python scripts/render_scenes.py
+
+      # ==========================================
+      # CONCATENATE & MIX AUDIO
+      # ==========================================
       - name: Concatenate Scenes & Mix Audio (Voiceover + Ambient Synth + Ducking)
         run: |
+          set -euo pipefail
           bash scripts/mix_audio.sh
 
+      # ==========================================
+      # QUALITY CONTROL
+      # ==========================================
       - name: Quality Control & Metadata Verification
         run: |
-          ffprobe -v error -show_entries format=duration:stream=codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,nb_frames -of default=nw=1 renders/final/jakarta_lowpoly_1080x1920.mp4
-          ffmpeg -i renders/final/jakarta_lowpoly_1080x1920.mp4 -vf "fps=1/5,scale=540:-1" renders/qc/preview_%02d.png
+          set -euo pipefail
 
+          ffprobe -v error \
+            -show_entries format=duration:stream=codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,nb_frames \
+            -of default=nw=1 \
+            renders/final/jakarta_lowpoly_1080x1920.mp4
+
+          ffmpeg -y \
+            -i renders/final/jakarta_lowpoly_1080x1920.mp4 \
+            -vf "fps=1/5,scale=540:-1" \
+            renders/qc/preview_%02d.png
+
+      # ==========================================
+      # UPLOAD ARTIFACTS
+      # ==========================================
       - name: Upload Final MP4 & QC Frames Artifact
         uses: actions/upload-artifact@v4
         with:

@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       render_engine:
-        description: 'Blender Render Engine (BLENDER_EEVEE_NEXT or CYCLES)'
+        description: 'Blender Render Engine'
         required: false
         default: 'BLENDER_EEVEE_NEXT'
       samples:
@@ -13,8 +13,13 @@ on:
         required: false
         default: '8'
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   render-video:
+    name: Render Group ${{ matrix.chunk }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -38,12 +43,16 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install System Dependencies
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg xvfb libegl1 libgl1 libgbm1 libgles2 libxi6 libxrender1 libxkbcommon0 libsm6 libice6 libglib2.0-0 libgomp1 fonts-dejavu-core wget xz-utils
+          sudo apt-get install -y \
+            xvfb libegl1 libgl1 libgbm1 libgles2 \
+            libxi6 libxrender1 libxkbcommon0 \
+            libsm6 libice6 libglib2.0-0 libgomp1 \
+            fonts-dejavu-core wget xz-utils
 
-      - name: Download & Install Blender 4.2 LTS
+      - name: Install Blender 4.2.3
         run: |
           wget -q https://download.blender.org/release/Blender4.2/blender-4.2.3-linux-x64.tar.xz
           tar -xf blender-4.2.3-linux-x64.tar.xz
@@ -51,33 +60,99 @@ jobs:
           sudo ln -sf /opt/blender/blender /usr/local/bin/blender
           blender --version
 
-      - name: Verify Audio & Timeline Calculation
+      - name: Prepare Render Directories
         run: |
-          chmod +x scripts/mix_audio.sh
-          ffprobe -v error -show_entries format=duration -of csv=p=0 assets/audio/voiceover.mp3
+          mkdir -p renders/scenes
+          mkdir -p renders/final
+          mkdir -p renders/qc
 
-      - name: Build & Render 10 Low-Poly 3D Scenes
+      - name: Build & Render Assigned Scenes
         env:
+          SCENE_FILTER: ${{ matrix.scenes }}
           RENDER_ENGINE: ${{ github.event.inputs.render_engine || 'BLENDER_EEVEE_NEXT' }}
           RENDER_SAMPLES: ${{ github.event.inputs.samples || '8' }}
         run: |
-          mkdir -p renders/scenes renders/final renders/qc
-          xvfb-run -a blender --background --python scripts/render_scenes.py
+          echo "================================"
+          echo "GROUP: ${{ matrix.chunk }}"
+          echo "SCENES: $SCENE_FILTER"
+          echo "================================"
 
-      - name: Concatenate Scenes & Mix Audio
+          xvfb-run -a blender \
+            --background \
+            --python scripts/render_scenes.py
+
+      - name: Upload Group Render Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-scenes-${{ matrix.chunk }}
+          path: renders/scenes/*.mp4
+          if-no-files-found: error
+          retention-days: 1
+
+  merge-video:
+    name: Merge All Scenes & Finalize Video
+    runs-on: ubuntu-latest
+    needs: render-video
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg
         run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Download All Group Results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: rendered-scenes-*
+          path: renders/scenes
+          merge-multiple: true
+
+      - name: Verify All 10 Scenes
+        run: |
+          echo "Checking rendered scenes..."
+
+          for i in $(seq -w 1 10); do
+            file="renders/scenes/scene_${i}.mp4"
+
+            if [ ! -s "$file" ]; then
+              echo "ERROR: Missing $file"
+              exit 1
+            fi
+
+            echo "FOUND: $file"
+          done
+
+          echo "All 10 scenes are ready."
+
+      - name: Mix Audio & Concatenate Scenes
+        run: |
+          chmod +x scripts/mix_audio.sh
           bash scripts/mix_audio.sh
 
-      - name: Quality Control & Metadata Verification
+      - name: Quality Control
         run: |
-          ffprobe -v error -show_entries format=duration:stream=codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,nb_frames -of default=nw=1 renders/final/jakarta_lowpoly_1080x1920.mp4
-          ffmpeg -i renders/final/jakarta_lowpoly_1080x1920.mp4 -vf "fps=1/5,scale=540:-1" renders/qc/preview_%02d.png
+          mkdir -p renders/final renders/qc
 
-      - name: Upload Final MP4 & QC Frames Artifact
+          ffprobe -v error \
+            -show_entries format=duration:stream=codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,nb_frames \
+            -of default=nw=1 \
+            renders/final/jakarta_lowpoly_1080x1920.mp4
+
+          ffmpeg -y \
+            -i renders/final/jakarta_lowpoly_1080x1920.mp4 \
+            -vf "fps=1/5,scale=540:-1" \
+            renders/qc/preview_%02d.png
+
+      - name: Upload Final MP4 & QC Frames
         uses: actions/upload-artifact@v4
         with:
           name: jakarta-lowpoly-3d-1080x1920
           path: |
             renders/final/jakarta_lowpoly_1080x1920.mp4
             renders/qc/*.png
+          if-no-files-found: error
           retention-days: 14

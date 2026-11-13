@@ -16,11 +16,6 @@ on:
 jobs:
   render-video:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
-
-jobs:
-  render-video:
-    runs-on: ubuntu-latest
     timeout-minutes: 180
 
     strategy:
@@ -39,9 +34,6 @@ jobs:
           - chunk: 5
             scenes: "scene_09,scene_10"
 
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4

@@ -710,3 +710,742 @@ def build_scene_05(f_start, f_end):
             data_path="location",
             frame=f
         )
+
+def build_scene_06(f_start, f_end):
+    clear_scene()
+
+    setup_lighting_and_world(
+        sky_color=(0.45, 0.78, 0.98),
+        sun_energy=4.0
+    )
+
+    build_ground_and_buildings()
+
+    mat_wood = get_or_create_material(
+        "BenchWood",
+        (0.58, 0.34, 0.16),
+        roughness=0.7
+    )
+
+    create_box(
+        "ParkBench",
+        size=(1.8, 0.65, 0.45),
+        location=(-12.5, 2.0, 0.22),
+        mat=mat_wood,
+        bevel_width=0.03
+    )
+
+    create_lowpoly_tree(
+        "ParkTree06",
+        location=(-14.2, 3.8, 0.0),
+        scale=1.4
+    )
+
+    reader = create_lowpoly_character(
+        "Reader",
+        location=(-12.5, 2.0, 0.15),
+        rotation=(0, 0, math.radians(-35))
+    )
+
+    reader["torso"].location.z = 0.82
+    reader["leg_l"].rotation_euler.x = math.radians(-85)
+    reader["leg_r"].rotation_euler.x = math.radians(-85)
+    reader["arm_l"].rotation_euler.x = math.radians(-48)
+    reader["arm_r"].rotation_euler.x = math.radians(-48)
+
+    book = create_box(
+        "BookObj",
+        size=(0.32, 0.24, 0.04),
+        location=(0, -0.28, -0.25),
+        mat=get_or_create_material(
+            "BookCover",
+            (0.95, 0.65, 0.15)
+        ),
+        parent=reader["torso"]
+    )
+
+    for f in range(f_start, f_end + 1, 3):
+        p = (f - f_start) / (f_end - f_start)
+
+        set_facial_expression(
+            reader,
+            f,
+            mood="happy_wide",
+            talk_phase=p * 8
+        )
+
+    cam = create_camera(
+        "Cam06",
+        location=(-10.5, -0.6, 1.5),
+        rotation=(
+            math.radians(84),
+            0,
+            math.radians(35)
+        ),
+        lens=38
+    )
+
+    for f in (f_start, f_end):
+        p = (f - f_start) / (f_end - f_start)
+
+        cam.location = (
+            -10.5 - p * 1.4,
+            -0.6 - p * 0.4,
+            1.55
+        )
+
+        cam.rotation_euler.z = math.radians(35 - p * 28)
+
+        cam.keyframe_insert(
+            data_path="location",
+            frame=f
+        )
+
+        cam.keyframe_insert(
+            data_path="rotation_euler",
+            frame=f
+        )
+
+
+def build_scene_07(f_start, f_end):
+    clear_scene()
+
+    setup_lighting_and_world(
+        sky_color=(0.45, 0.78, 0.98),
+        sun_energy=4.2
+    )
+
+    build_ground_and_buildings()
+
+    mat_park_grass = get_or_create_material(
+        "NewParkGrass",
+        (0.22, 0.72, 0.28),
+        roughness=0.75
+    )
+
+    mat_bike_lane = get_or_create_material(
+        "BikeLaneGreen",
+        (0.12, 0.65, 0.35),
+        roughness=0.6
+    )
+
+    park_pad = create_box(
+        "TransformedPark",
+        size=(6.5, 16.0, 0.28),
+        location=(-12.5, 4.0, 0.14),
+        mat=mat_park_grass,
+        bevel_width=0.04
+    )
+
+    create_box(
+        "BikeLane",
+        size=(1.6, 60.0, 0.34),
+        location=(-7.6, 15.0, 0.01),
+        mat=mat_bike_lane
+    )
+
+    t1, c1a, c1b = create_lowpoly_tree(
+        "GrowTree1",
+        location=(-13.5, 2.0, 0.28),
+        scale=1.2
+    )
+
+    t2, c2a, c2b = create_lowpoly_tree(
+        "GrowTree2",
+        location=(-11.5, 7.5, 0.28),
+        scale=1.35
+    )
+
+    cyclist = create_lowpoly_character(
+        "Cyclist",
+        location=(-7.6, -6.0, 0.45),
+        rotation=(0, 0, math.radians(180)),
+        shirt_color=(0.95, 0.45, 0.15)
+    )
+
+    bike_frame = create_box(
+        "BikeFrame",
+        size=(0.14, 1.4, 0.55),
+        location=(0, 0, 0.42),
+        mat=get_or_create_material(
+            "BikeMetal",
+            (0.95, 0.80, 0.12),
+            metallic=0.6
+        ),
+        parent=cyclist["root"]
+    )
+
+    for f in range(f_start, f_end + 1, 3):
+        p = (f - f_start) / (f_end - f_start)
+
+        grow = min(1.0, p * 1.6)
+
+        t1.scale = (
+            grow * 1.2,
+            grow * 1.2,
+            grow * 1.2
+        )
+
+        t2.scale = (
+            grow * 1.35,
+            grow * 1.35,
+            grow * 1.35
+        )
+
+        t1.keyframe_insert(
+            data_path="scale",
+            frame=f
+        )
+
+        t2.keyframe_insert(
+            data_path="scale",
+            frame=f
+        )
+
+        cyclist["root"].location.y = -6.0 + p * 18.0
+
+        cyclist["root"].keyframe_insert(
+            data_path="location",
+            frame=f
+        )
+
+        set_facial_expression(
+            cyclist,
+            f,
+            mood="happy_wide",
+            talk_phase=p * 8
+        )
+
+    cam = create_camera(
+        "Cam07",
+        location=(-5.0, -7.5, 3.2),
+        rotation=(
+            math.radians(72),
+            0,
+            math.radians(26)
+        ),
+        lens=30
+    )
+
+    for f in (f_start, f_end):
+        p = (f - f_start) / (f_end - f_start)
+
+        cam.location = (
+            -5.0 + p * 2.0,
+            -7.5 - p * 2.5,
+            3.2 + p * 1.5
+        )
+
+        cam.keyframe_insert(
+            data_path="location",
+            frame=f
+        )
+
+
+def build_scene_08(f_start, f_end):
+    clear_scene()
+
+    setup_lighting_and_world(
+        sky_color=(0.40, 0.78, 0.99),
+        sun_energy=4.4
+    )
+
+    build_ground_and_buildings()
+
+    create_lowpoly_tree(
+        "FreshTree1",
+        location=(-8.8, 2.5, 0.16),
+        scale=1.3
+    )
+
+    create_lowpoly_tree(
+        "FreshTree2",
+        location=(-10.5, 5.5, 0.16),
+        scale=1.5
+    )
+
+    hero = create_lowpoly_character(
+        "Andra08",
+        location=(-7.6, 0.0, 0.16),
+        rotation=(0, 0, math.radians(-15))
+    )
+
+    for f in range(f_start, f_end + 1, 3):
+        p = (f - f_start) / (f_end - f_start)
+
+        breath = math.sin(p * math.pi)
+
+        hero["torso"].scale = (
+            1.0 + breath * 0.06,
+            1.0 + breath * 0.08,
+            1.0 + breath * 0.04
+        )
+
+        hero["head_pivot"].rotation_euler.x = (
+            breath * math.radians(10)
+        )
+
+        hero["torso"].keyframe_insert(
+            data_path="scale",
+            frame=f
+        )
+
+        hero["head_pivot"].keyframe_insert(
+            data_path="rotation_euler",
+            frame=f
+        )
+
+        set_facial_expression(
+            hero,
+            f,
+            mood="calm_inhale" if p < 0.65 else "happy_wide",
+            talk_phase=0.0
+        )
+
+    cam = create_camera(
+        "Cam08",
+        location=(-7.2, -1.75, 1.62),
+        rotation=(
+            math.radians(89),
+            0,
+            math.radians(-10)
+        ),
+        lens=48
+    )
+
+    for f in (f_start, f_end):
+        p = (f - f_start) / (f_end - f_start)
+
+        cam.location = (
+            -7.2,
+            -1.75 - p * 0.35,
+            1.62
+        )
+
+        cam.keyframe_insert(
+            data_path="location",
+            frame=f
+        )
+
+
+def build_scene_09(f_start, f_end):
+    clear_scene()
+
+    setup_lighting_and_world(
+        sky_color=(0.42, 0.77, 0.99),
+        sun_energy=4.3
+    )
+
+    build_ground_and_buildings()
+
+    create_monas_landmark(
+        location=(0, 42, 0)
+    )
+
+    create_lowpoly_tree(
+        "Tree09A",
+        location=(-8.8, 5, 0.16),
+        scale=1.2
+    )
+
+    create_lowpoly_tree(
+        "Tree09B",
+        location=(8.8, 10, 0.16),
+        scale=1.3
+    )
+
+    hero = create_lowpoly_character(
+        "Andra09",
+        location=(-7.5, -2.0, 0.16),
+        rotation=(0, 0, math.radians(165))
+    )
+
+    animate_walk_cycle(
+        hero,
+        f_start,
+        f_end,
+        speed=0.9
+    )
+
+    for f in range(f_start, f_end + 1, 3):
+        p = (f - f_start) / (f_end - f_start)
+
+        hero["root"].location.y = -2.0 + p * 7.5
+
+        hero["root"].keyframe_insert(
+            data_path="location",
+            frame=f
+        )
+
+        hero["arm_r"].rotation_euler.y = (
+            math.radians(-135)
+            + math.sin(p * 14) * math.radians(18)
+        )
+
+        hero["arm_r"].keyframe_insert(
+            data_path="rotation_euler",
+            frame=f
+        )
+
+        set_facial_expression(
+            hero,
+            f,
+            mood="happy_wide",
+            talk_phase=p * 10
+        )
+
+    cam = create_camera(
+        "Cam09",
+        location=(-5.8, -5.5, 2.0),
+        rotation=(
+            math.radians(85),
+            0,
+            math.radians(16)
+        ),
+        lens=32
+    )
+
+    for f in (f_start, f_end):
+        p = (f - f_start) / (f_end - f_start)
+
+        cam.location = (
+            -5.8 + p * 2.5,
+            -5.5 + p * 7.0,
+            2.0 + p * 0.6
+        )
+
+        cam.keyframe_insert(
+            data_path="location",
+            frame=f
+        )
+
+
+def build_scene_10(f_start, f_end):
+    clear_scene()
+
+    setup_lighting_and_world(
+        sky_color=(0.42, 0.78, 0.99),
+        sun_energy=4.4
+    )
+
+    build_ground_and_buildings()
+
+    create_monas_landmark(
+        location=(0, 44, 0)
+    )
+
+    mrt = create_mrt_train(
+        "MRT_Finale",
+        location=(0, 14, 0.2)
+    )
+
+    mrt.rotation_euler.z = math.radians(90)
+
+    citizens = [
+        create_lowpoly_character(
+            "CitA",
+            location=(-7.5, -3.0, 0.16),
+            rotation=(0, 0, math.radians(175)),
+            shirt_color=(0.15, 0.55, 0.88)
+        ),
+
+        create_lowpoly_character(
+            "CitB",
+            location=(-8.5, -1.5, 0.16),
+            rotation=(0, 0, math.radians(175)),
+            is_student=True
+        ),
+
+        create_lowpoly_character(
+            "CitC",
+            location=(7.5, -2.5, 0.16),
+            rotation=(0, 0, math.radians(-175)),
+            shirt_color=(0.92, 0.42, 0.22)
+        ),
+    ]
+
+    for c in citizens:
+        animate_walk_cycle(
+            c,
+            f_start,
+            f_end,
+            speed=0.95
+        )
+
+    for f in range(f_start, f_end + 1, 3):
+        p = (f - f_start) / (f_end - f_start)
+
+        for idx, c in enumerate(citizens):
+            c["root"].location.y = (
+                -3.0 + idx * 0.6 + p * 6.5
+            )
+
+            c["root"].keyframe_insert(
+                data_path="location",
+                frame=f
+            )
+
+            set_facial_expression(
+                c,
+                f,
+                mood="happy_wide",
+                talk_phase=p * 8
+            )
+
+    cam = create_camera(
+        "Cam10",
+        location=(0, -8.5, 2.6),
+        rotation=(math.radians(82), 0, 0),
+        lens=28
+    )
+
+    for f in (f_start, f_end):
+        p = (f - f_start) / (f_end - f_start)
+
+        cam.location = (
+            0,
+            -8.5 - p * 4.5,
+            2.6 + p * 6.5
+        )
+
+        cam.rotation_euler.x = math.radians(82 - p * 14)
+
+        cam.keyframe_insert(
+            data_path="location",
+            frame=f
+        )
+
+        cam.keyframe_insert(
+            data_path="rotation_euler",
+            frame=f
+        )
+
+
+BUILDERS = {
+    "scene_01": build_scene_01,
+    "scene_02": build_scene_02,
+    "scene_03": build_scene_03,
+    "scene_04": build_scene_04,
+    "scene_05": build_scene_05,
+    "scene_06": build_scene_06,
+    "scene_07": build_scene_07,
+    "scene_08": build_scene_08,
+    "scene_09": build_scene_09,
+    "scene_10": build_scene_10,
+}
+
+
+def main():
+    output_dir = os.environ.get(
+        "RENDER_OUTPUT_DIR",
+        os.path.abspath(
+            os.path.join(os.getcwd(), "renders", "scenes")
+        )
+    )
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    valid_scenes = {
+        scene_id
+        for scene_id, _, _ in SCENES_TIMELINE
+    }
+
+    if len(valid_scenes) != len(SCENES_TIMELINE):
+        raise RuntimeError(
+            "Terdapat scene ID duplikat dalam SCENES_TIMELINE."
+        )
+
+    missing_builders = valid_scenes - set(BUILDERS.keys())
+
+    if missing_builders:
+        raise RuntimeError(
+            f"Builder tidak ditemukan untuk scene: "
+            f"{sorted(missing_builders)}"
+        )
+
+    raw_filter = os.environ.get(
+        "SCENE_FILTER",
+        ""
+    ).strip()
+
+    if raw_filter:
+        scene_filter = {
+            item.strip()
+            for item in raw_filter.split(",")
+            if item.strip()
+        }
+    else:
+        scene_filter = valid_scenes.copy()
+
+    invalid_scenes = scene_filter - valid_scenes
+
+    if invalid_scenes:
+        raise ValueError(
+            f"Scene tidak dikenal: {sorted(invalid_scenes)}"
+        )
+
+    selected_scenes = [
+        item
+        for item in SCENES_TIMELINE
+        if item[0] in scene_filter
+    ]
+
+    if not selected_scenes:
+        raise RuntimeError(
+            "Tidak ada scene yang dipilih!"
+        )
+
+    engine = os.environ.get(
+        "RENDER_ENGINE",
+        "BLENDER_EEVEE_NEXT"
+    )
+
+    samples = max(
+        4,
+        int(os.environ.get("RENDER_SAMPLES", "4"))
+    )
+
+    print("\n" + "=" * 60)
+    print("JAKARTA LOW-POLY 3D RENDER")
+    print("SINGLE JOB - SEQUENTIAL RENDER")
+    print(f"ENGINE: {engine}")
+    print(f"SAMPLES: {samples}")
+    print(f"TOTAL SCENES: {len(selected_scenes)}")
+    print(f"OUTPUT: {output_dir}")
+    print(
+        "SCENES:",
+        [item[0] for item in selected_scenes]
+    )
+    print("=" * 60, flush=True)
+
+    for index, (
+        scene_id,
+        frame_start,
+        frame_end_exclusive
+    ) in enumerate(selected_scenes, start=1):
+
+        frame_end = frame_end_exclusive - 1
+
+        print("\n" + "-" * 60, flush=True)
+        print(
+            f"[SCENE {index}/{len(selected_scenes)}] "
+            f"BUILDING {scene_id}",
+            flush=True
+        )
+
+        print(
+            f"FRAMES: {frame_start} - {frame_end}",
+            flush=True
+        )
+
+        BUILDERS[scene_id](
+            frame_start,
+            frame_end
+        )
+
+        output_filepath = os.path.join(
+            output_dir,
+            f"{scene_id}.mp4"
+        )
+
+        configure_render(
+            output_filepath,
+            frame_start,
+            frame_end
+        )
+
+        print(
+            f"START RENDER: {scene_id}",
+            flush=True
+        )
+
+        bpy.ops.render.render(
+            animation=True
+        )
+
+        if not os.path.isfile(output_filepath):
+            alternate_path = output_filepath + ".mp4"
+
+            if os.path.isfile(alternate_path):
+                output_filepath = alternate_path
+
+        if not os.path.isfile(output_filepath):
+            raise RuntimeError(
+                f"File hasil render tidak ditemukan: "
+                f"{output_filepath}"
+            )
+
+        file_size = os.path.getsize(
+            output_filepath
+        )
+
+        if file_size <= 0:
+            raise RuntimeError(
+                f"Output scene kosong: {output_filepath}"
+            )
+
+        print(
+            f"SUCCESS: {scene_id}",
+            flush=True
+        )
+
+        print(
+            f"OUTPUT: {output_filepath}",
+            flush=True
+        )
+
+        print(
+            f"FILE SIZE: {file_size} bytes",
+            flush=True
+        )
+
+        print(
+            f"PROGRESS: {index}/{len(selected_scenes)}",
+            flush=True
+        )
+
+    print("\n" + "=" * 60)
+    print("VERIFYING ALL RENDERED SCENES")
+    print("=" * 60, flush=True)
+
+    for scene_id, _, _ in selected_scenes:
+        output_filepath = os.path.join(
+            output_dir,
+            f"{scene_id}.mp4"
+        )
+
+        if not os.path.isfile(output_filepath):
+            alternate_path = output_filepath + ".mp4"
+
+            if os.path.isfile(alternate_path):
+                output_filepath = alternate_path
+
+        if not os.path.isfile(output_filepath):
+            raise RuntimeError(
+                f"Scene belum berhasil dirender: {scene_id}"
+            )
+
+        size = os.path.getsize(
+            output_filepath
+        )
+
+        if size <= 0:
+            raise RuntimeError(
+                f"Output scene kosong: {output_filepath}"
+            )
+
+        print(
+            f"VERIFIED: {os.path.basename(output_filepath)} "
+            f"({size} bytes)",
+            flush=True
+        )
+
+    print("\n" + "=" * 60)
+    print("ALL SCENES RENDERED SUCCESSFULLY!")
+    print(f"TOTAL: {len(selected_scenes)} SCENES")
+    print("RENDER MODE: SINGLE JOB")
+    print("=" * 60, flush=True)
+
+
+if __name__ == "__main__":
+    main()

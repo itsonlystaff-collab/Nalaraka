@@ -33,9 +33,10 @@ SCENES_TIMELINE = [
 def configure_render(output_filepath, frame_start, frame_end):
     scene = bpy.context.scene
     engine = os.environ.get("RENDER_ENGINE", "BLENDER_EEVEE_NEXT")
-    samples = int(os.environ.get("RENDER_SAMPLES", "32"))
+    samples = int(os.environ.get("RENDER_SAMPLES", "8"))
 
     scene.render.engine = engine
+
     if engine == "BLENDER_EEVEE_NEXT":
         scene.eevee.taa_render_samples = samples
     elif engine == "CYCLES":
